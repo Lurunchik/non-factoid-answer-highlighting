@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "non-factoid-answer-highlighting"
+version = "1.0.0"
+description = ""
+authors = ["Valeriia Bolotova <lurunchik@gmail.com>", "Vladislav Blinov <cunningplan@yandex.ru>"]
+repository = "https://github.com/Lurunchik/non-factoid-answer-highlighting"
+readme = "README.md"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7.0"
+torch = "^1.3.1"
+transformers = "^2.3.0"
+pytorch-lightning = "^0.5.3"
+numpy = "^1.16.4"
+joblib = "*"
+typer = "^0.3.2"
+
+[tool.poetry.dev-dependencies]
+mypy = "^0.740"
+flake8 = "^3.7.9"
+flake8-isort = "^2.7.0"
+flake8-builtins = "^1.4.1"
+flake8-comprehensions = "^3.0.1"
+flake8-debugger = "^3.2.1"
+flake8-eradicate = "^0.2.3"
+pep8-naming = "^0.9.0"
+black = "^19.10b0"
+isort = "^4.3.21"
+unify = "^0.5"
+pylint = "^2.4.3"
+
+[tool.black]
+line-length = 88
+target-version = ["py37"]
+
+[build-system]
+requires = ["poetry>=1.0.5"]
+build-backend = "poetry.masonry.api"
