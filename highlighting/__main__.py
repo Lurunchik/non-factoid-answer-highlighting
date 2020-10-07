@@ -16,9 +16,7 @@ def get_data(data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=Fal
 
 
 @app.command()
-def train(
-    data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=False, exists=True)
-):
+def train(data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=False, exists=True)):
     ...
 
 

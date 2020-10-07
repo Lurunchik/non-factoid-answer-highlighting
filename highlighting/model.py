@@ -33,9 +33,7 @@ class QAMatchingBert(pl.LightningModule):
 
         self._weight_decay_rate = weight_decay_rate
 
-    def _get_metrics(
-        self, batch: BertInput
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _get_metrics(self, batch: BertInput) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Run prediction on a batch with known labels and return evaluation metrics
         """
@@ -56,10 +54,7 @@ class QAMatchingBert(pl.LightningModule):
 
         optimizer = AdamW(
             params=[
-                {
-                    'params': parameters_with_decay,
-                    'weight_decay_rate': self._weight_decay_rate,
-                },
+                {'params': parameters_with_decay, 'weight_decay_rate': self._weight_decay_rate},
                 {'params': parameters_without_decay, 'weight_decay_rate': 0.0},
             ],
             lr=2e-5,
@@ -70,10 +65,7 @@ class QAMatchingBert(pl.LightningModule):
         labels, input_ids, attention_mask, token_type_ids = batch
 
         loss, logits = self.model(
-            input_ids,
-            token_type_ids=token_type_ids,
-            attention_mask=attention_mask,
-            labels=labels,
+            input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels,
         )
         return loss, logits
 

@@ -1,6 +1,6 @@
 CODE = highlighting
 VENV = poetry run
-WIDTH = 88
+WIDTH = 120
 
 .PHONY: pretty lint
 

@@ -1,4 +1,6 @@
 import math
+from string import punctuation
+from typing import List
 
 HTML_ESCAPE_TABLE = {
     '&': '&amp;',
@@ -7,12 +9,55 @@ HTML_ESCAPE_TABLE = {
     '>': '&gt;',
     '<': '&lt;',
 }
+EXCLUDING_PUNCTUATION = punctuation + ''')(\\/"\''''
 
 
 def html_replace(text):
     for c in HTML_ESCAPE_TABLE.values():
         text = text.replace(c, ' ')
     return text
+
+
+def get_text_heatmap_html(text: str, tokens: List[str], weights: List[float], color: str = '191,63,63'):
+    max_alpha = 0.8
+    offset = len(tokens[0])
+    result_tokens = [text[:offset]]
+
+    i = 1
+    while i < len(tokens):
+        token = tokens[i]
+        weight = weights[i]
+        i += 1
+
+        start = text.lower().find(token, offset)
+        assert start > 0, (text, token, offset)
+
+        orig_token = text[start : start + len(token)]
+        offset = start + len(token)
+
+        if weight is not None:
+            if color is not None:
+                orig_token = (
+                    f'<span style="background-color:rgba({color},'
+                    + str(weight / max_alpha)
+                    + ');">'
+                    + orig_token
+                    + '</span>'
+                )
+            else:
+                orig_token = f'**' + orig_token + '**'
+
+        result_tokens.append(orig_token)
+
+        j = 0
+        while offset + j < len(text) and text[offset + j] == ' ':
+            result_tokens.append(' ')
+            j += 1
+
+    if offset < len(text):
+        result_tokens.append(text[offset + 1 :])
+
+    return ''.join(result_tokens)
 
 
 def predict_highlighting_len(token_count: int):

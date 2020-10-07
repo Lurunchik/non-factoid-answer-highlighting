@@ -68,25 +68,15 @@ def train(
     val_dataset = load_dataset(val_path)
     test_dataset = load_dataset(test_path)
 
-    train_dataloader = DataLoader(
-        train_dataset, sampler=RandomSampler(train_dataset), batch_size=BATCH_SIZE
-    )
-    val_dataloader = DataLoader(
-        val_dataset, sampler=SequentialSampler(val_dataset), batch_size=BATCH_SIZE
-    )
+    train_dataloader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=BATCH_SIZE)
+    val_dataloader = DataLoader(val_dataset, sampler=SequentialSampler(val_dataset), batch_size=BATCH_SIZE)
 
-    test_dataloader = DataLoader(
-        test_dataset, sampler=SequentialSampler(test_dataset), batch_size=BATCH_SIZE
-    )
+    test_dataloader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), batch_size=BATCH_SIZE)
 
     LOGGER.info('Loading pretrained bert')
-    bert_pretrained = BertForSequenceClassification.from_pretrained(
-        BASE_BERT, num_labels=NUM_LABELS
-    )
+    bert_pretrained = BertForSequenceClassification.from_pretrained(BASE_BERT, num_labels=NUM_LABELS)
 
-    early_stop_callback = EarlyStopping(
-        monitor='val_loss', min_delta=0.0, patience=1, verbose=True, mode='min'
-    )
+    early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0.0, patience=1, verbose=True, mode='min')
 
     trainer = pl.Trainer(
         gpus=gpus,
@@ -94,9 +84,7 @@ def train(
         early_stop_callback=early_stop_callback,
     )
 
-    model = QAMatchingBert(
-        bert_pretrained, train_dataloader, val_dataloader, test_dataloader
-    )
+    model = QAMatchingBert(bert_pretrained, train_dataloader, val_dataloader, test_dataloader)
 
     trainer.fit(model)
     trainer.test()
