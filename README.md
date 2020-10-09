@@ -17,7 +17,7 @@ From source:
     poetry install
     poetry shell
 
-## Running
+## Highlighter usage
 
 You can import highlighter to run on your texts as shown in [example notebook](https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb) notebook 
 
@@ -45,6 +45,17 @@ You can also use a commandline to highlight your answer by giving a question and
 ```bash 
 python -m highlighting highlight "why is life so hard?" "This is life, my friend"`
 ```
+
+## Model training
+Load and prepare training data:
+```bash 
+python -m highlighting load_dataset
+```
+Run traning
+```bash 
+python -m highlighting train
+```
+
 
 ## Citation
 

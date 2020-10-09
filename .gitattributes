@@ -2,6 +2,3 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.joblib filter=lfs diff=lfs merge=lfs -text
 highlighting/data filter=lfs diff=lfs merge=lfs -text
-highlighting/data/nfl6_pretrained/train.joblib filter=lfs diff=lfs merge=lfs -text
-highlighting/data/nfl6_pretrained/test.joblib filter=lfs diff=lfs merge=lfs -text
-highlighting/data/nfl6_pretrained/val.joblib filter=lfs diff=lfs merge=lfs -text

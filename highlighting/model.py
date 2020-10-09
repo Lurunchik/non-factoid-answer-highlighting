@@ -12,6 +12,7 @@ BertInput = Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
 # loss, logits
 BertOutput = Tuple[torch.Tensor, torch.Tensor]
+BASE_BERT = 'bert-large-cased-whole-word-masking'
 
 
 class QAMatchingBert(pl.LightningModule):

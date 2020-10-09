@@ -11,22 +11,18 @@ from pytorch_lightning.callbacks import EarlyStopping
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from transformers import BertForSequenceClassification
 
-from highlighting.model import QAMatchingBert
+from highlighting import DATA_FOLDER
+from highlighting.model import BASE_BERT, QAMatchingBert
 
 LOGGER = logging.getLogger(__name__)
 
-BASE_BERT = 'bert-large-cased-whole-word-masking'
 BATCH_SIZE = 20
 NUM_LABELS = 2  # "answer" or "not an answer"
 
 RANDOM_SEED = 146
 
 
-def save(dataset, name):
-    joblib.dump([list(map(np.array, t)) for t in dataset], f'{name}.joblib')
-
-
-def load_dataset(path: pathlib.Path):
+def _load_dataset(path: pathlib.Path):
     LOGGER.info('Load data from %s', path)
     return [tuple(map(torch.tensor, t)) for t in joblib.load(path)]
 
@@ -57,15 +53,15 @@ def set_random_seed(seed_value: int):
 
 def train(
     gpus: List[int] = (1,),
-    train_path: pathlib.Path = pathlib.Path('train.joblib'),
-    val_path: pathlib.Path = pathlib.Path('val.joblib'),
-    test_path: pathlib.Path = pathlib.Path('test.joblib'),
+    train_path: pathlib.Path = DATA_FOLDER / pathlib.Path('train.joblib'),
+    val_path: pathlib.Path = DATA_FOLDER / pathlib.Path('val.joblib'),
+    test_path: pathlib.Path = DATA_FOLDER / pathlib.Path('test.joblib'),
 ):
     set_random_seed(RANDOM_SEED)
 
-    train_dataset = load_dataset(train_path)
-    val_dataset = load_dataset(val_path)
-    test_dataset = load_dataset(test_path)
+    train_dataset = _load_dataset(train_path)
+    val_dataset = _load_dataset(val_path)
+    test_dataset = _load_dataset(test_path)
 
     train_dataloader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=BATCH_SIZE)
     val_dataloader = DataLoader(val_dataset, sampler=SequentialSampler(val_dataset), batch_size=BATCH_SIZE)
@@ -79,7 +75,7 @@ def train(
 
     trainer = pl.Trainer(
         gpus=gpus,
-        default_save_path='../data/models/checkpoints/bert/nfL6_classification/',
+        default_save_path=DATA_FOLDER / '/models/checkpoints/bert/nfL6_classification/',
         early_stop_callback=early_stop_callback,
     )
 
