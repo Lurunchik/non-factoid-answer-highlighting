@@ -1,6 +1,13 @@
+import logging
 import math
+import random
 from string import punctuation
 from typing import List
+
+import numpy as np
+import torch
+
+LOGGER = logging.getLogger(__name__)
 
 HTML_ESCAPE_TABLE = {
     '&': '&amp;',
@@ -9,7 +16,21 @@ HTML_ESCAPE_TABLE = {
     '>': '&gt;',
     '<': '&lt;',
 }
-EXCLUDING_PUNCTUATION = punctuation + ''')(\\/"\''''
+EXCLUDED_PUNCTUATION = punctuation + ''')(\\/"\''''
+
+
+def set_random_seed(seed_value: int = 146):
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    LOGGER.info('Set random seed to %i', seed_value)
 
 
 def html_replace(text):
@@ -18,61 +39,51 @@ def html_replace(text):
     return text
 
 
-def get_text_heatmap_html(text: str, tokens: List[str], weights: List[float], color: str = '191,63,63'):
-    max_alpha = 0.8
-    offset = len(tokens[0])
-    result_tokens = [text[:offset]]
+def get_text_heatmap_html(text: str, tokens: List[str], weights: List[float], max_alpha: float = 0.8):
+    text = text.lower()
 
-    i = 1
-    while i < len(tokens):
-        token = tokens[i]
-        weight = weights[i]
-        i += 1
-
-        start = text.lower().find(token, offset)
-        assert start > 0, (text, token, offset)
-
-        orig_token = text[start : start + len(token)]
-        offset = start + len(token)
+    offset = 0
+    processed_tokens = []
+    for token, weight in zip(tokens, weights):
+        start = text.find(token, offset)
+        if start < 0:
+            raise ValueError(f'Cannot find "{token}" in "{text}" from position {offset}')
 
         if weight is not None:
-            if color is not None:
-                orig_token = (
-                    f'<span style="background-color:rgba({color},'
-                    + str(weight / max_alpha)
-                    + ');">'
-                    + orig_token
-                    + '</span>'
-                )
-            else:
-                orig_token = f'**' + orig_token + '**'
+            highlighted_token = f'<span style="background-color:rgba(191,63,63,{weight / max_alpha});">{token}</span>'
+            processed_tokens.append(highlighted_token)
+        else:
+            processed_tokens.append(token)
 
-        result_tokens.append(orig_token)
-
-        j = 0
-        while offset + j < len(text) and text[offset + j] == ' ':
-            result_tokens.append(' ')
-            j += 1
+        offset = start + len(token)
+        while offset < len(text) and text[offset] == ' ':
+            processed_tokens.append(' ')
+            offset += 1
 
     if offset < len(text):
-        result_tokens.append(text[offset + 1 :])
+        processed_tokens.append(text[offset + 1 :])
 
-    return ''.join(result_tokens)
+    return ''.join(processed_tokens)
 
 
-def predict_highlighting_len(token_count: int):
+_REGRESSION_INTERCEPT = 5.072644377132419
+_REGRESSION_COEFFICIENT = 0.01133515
+_REGRESSION_COEFFICIENT_FOR_SHORT_TEXTS = 0.2911335
+
+
+def predict_number_of_highlighted_words(token_count: int) -> int:
     """
-    Piecewise Linear Regression
-    :param token_count: int
-    :return: int highlighted
-    """
-    intercept_ = 5.072644377132419
-    coef_ = 0.01133515
-    small_coef_ = 0.2911335
+    Predict the number of tokens to highlight for a given token count using Piecewise Linear Regression
 
+    Args:
+        token_count: Number of tokens in a text
+
+    Returns:
+        Number of tokens to highlight
+    """
     if token_count < 20:
-        return math.ceil(small_coef_ * token_count)
-    return math.ceil(intercept_ + token_count * coef_)
+        return math.ceil(_REGRESSION_COEFFICIENT_FOR_SHORT_TEXTS * token_count)
+    return math.ceil(_REGRESSION_INTERCEPT + _REGRESSION_COEFFICIENT * token_count)
 
 
 STOPWORDS = [

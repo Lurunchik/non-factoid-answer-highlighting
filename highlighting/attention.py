@@ -1,53 +1,56 @@
 from collections import defaultdict
-from typing import Sequence, Set
+from typing import Dict, Iterator, Optional, Sequence, Set
 
 import numpy as np
 
-from highlighting.utils import EXCLUDING_PUNCTUATION, STOPWORDS
+from highlighting.utils import EXCLUDED_PUNCTUATION, STOPWORDS
 
 
 class AttentionMap:
-    def __init__(self, attention_map: np.ndarray, special_tokens: Sequence[str] = ()):
+    def __init__(self, attention_map: Dict[str, Dict[str, np.ndarray]], special_tokens: Sequence[str] = ()):
         """
-        attention_map: attention map from bertviz.neuron_view.get_attention
-
-        Dictionary of attn representations with the structure:
-      {
-        'all': All attention (source = AB, target = AB)
-        'aa': Sentence A self-attention (source = A, target = A) (if sentence_b is not None)
-        'bb': Sentence B self-attention (source = B, target = B) (if sentence_b is not None)
-        'ab': Sentence A -> Sentence B attention (source = A, target = B) (if sentence_b is not None)
-        'ba': Sentence B -> Sentence A attention (source = B, target = A) (if sentence_b is not None)
-      }
-      where each value is a dictionary:
-      {
-        'left_text': list of source tokens, to be displayed on the left of the vis
-        'right_text': list of target tokens, to be displayed on the right of the vis
-        'attn': list of attention matrices, one for each layer. Each has shape [num_heads, source_seq_len, target_seq_len]
-        'queries' (optional): list of query vector arrays, one for each layer. Each has shape (num_heads, source_seq_len, vector_size)
-        'keys' (optional): list of key vector arrays, one for each layer. Each has shape (num_heads, target_seq_len, vector_size)
-      }
+        Args:
+            attention_map: Attention map produced by `bertviz.neuron_view.get_attention`
+                A dictionary of attentions with the following structure is expected:
+                {
+                    'all': All attention (source = AB, target = AB)
+                    'aa': Sentence A self-attention (source = A, target = A) (if sentence_b is not None)
+                    'bb': Sentence B self-attention (source = B, target = B) (if sentence_b is not None)
+                    'ab': Sentence A -> Sentence B attention (source = A, target = B) (if sentence_b is not None)
+                    'ba': Sentence B -> Sentence A attention (source = B, target = A) (if sentence_b is not None)
+                }
+                where each value is a dictionary:
+                {
+                    'left_text': list of source tokens, to be displayed on the left of the vis
+                    'right_text': list of target tokens, to be displayed on the right of the vis
+                    'attn': list of attention matrices, one for each layer. Each has shape [num_heads, source_seq_len, target_seq_len]
+                    'queries' (optional): list of query vector arrays, one for each layer. Each has shape (num_heads, source_seq_len, vector_size)
+                    'keys' (optional): list of key vector arrays, one for each layer. Each has shape (num_heads, target_seq_len, vector_size)
+                }
+            special_tokens: Sequence of special tokens used in the model, these tokens are ignored in the attention map
         """
-        self._attn = attention_map
-        self._special_tokens = special_tokens
-        self._ignore_tokens = set(EXCLUDING_PUNCTUATION)
+        self._map = attention_map
+        self._ignore_tokens = set(EXCLUDED_PUNCTUATION).union(special_tokens)
         self._filtered_tokens, self._token_weights = self._calculate_mean_attn()
 
     @property
     def answer_tokens(self):
-        return self._attn['ab']['right_text']
+        return self._map['ab']['right_text']
 
-    def iter_answer_tokens(self, ignore_tokens: Set[str] = None, merge_word_pieces: bool = False):
-        ignore_tokens = ignore_tokens or set()
+    def iter_answer_tokens(
+        self, ignored_tokens: Optional[Set[str]] = None, merge_subtokens: bool = False
+    ) -> Iterator[str]:
+        answer_tokens = self.answer_tokens
+        ignored_tokens = ignored_tokens or set()
 
         i = 0
-        while i < len(self.answer_tokens):
-            token = self.answer_tokens[i]
-            if token not in ignore_tokens:
-                if merge_word_pieces:
+        while i < len(answer_tokens):
+            token = answer_tokens[i]
+            if token not in ignored_tokens:
+                if merge_subtokens:
                     j = i + 1
-                    while j < len(self.answer_tokens) and self.answer_tokens[j].startswith('##'):
-                        token += self.answer_tokens[j].lstrip('##')
+                    while j < len(answer_tokens) and answer_tokens[j].startswith('##'):
+                        token += answer_tokens[j].lstrip('#')
                         j += 1
                     i = j - 1
                 yield token
@@ -77,17 +80,16 @@ class AttentionMap:
 
     def _calculate_mean_attn(self):
         ignore_tokens = self._ignore_tokens
-        ignore_tokens.update(self._special_tokens)
 
-        filtered_tokens = list(self.iter_answer_tokens(ignore_tokens, merge_word_pieces=True))
-        mean_wghts = np.zeros((len(self._attn['ab']['attn']), len(self._attn['ab']['attn'][0]), len(filtered_tokens),))
+        filtered_tokens = list(self.iter_answer_tokens(ignore_tokens, merge_subtokens=True))
+        mean_wghts = np.zeros((len(self._map['ab']['attn']), len(self._map['ab']['attn'][0]), len(filtered_tokens),))
 
-        for attention in [self._attn['ab']['attn']]:
+        for attention in [self._map['ab']['attn']]:
             for layer, data in enumerate(attention):
                 for head, word_weights in enumerate(data):
                     token_index = 0
-                    for i, w in enumerate(self.iter_answer_tokens(ignore_tokens, merge_word_pieces=False)):
-                        query_weights = np.sum(self._attn['aa']['attn'][layer][head], axis=0)
+                    for i, w in enumerate(self.iter_answer_tokens(ignore_tokens, merge_subtokens=False)):
+                        query_weights = np.sum(self._map['aa']['attn'][layer][head], axis=0)
                         cur_attn = np.mean(np.array([x[i] for x in word_weights]) * query_weights)
 
                         if w.startswith('##'):

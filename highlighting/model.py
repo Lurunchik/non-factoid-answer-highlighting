@@ -5,6 +5,8 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AdamW, BertForSequenceClassification
 
+BASE_BERT_MODEL_NAME = 'bert-large-uncased-whole-word-masking'
+
 NO_DECAY_PARAMETER_SUBSTRINGS = ('bias', 'gamma', 'beta')
 
 # labels, input_ids, attention_mask, token_type_ids
@@ -12,10 +14,13 @@ BertInput = Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
 # loss, logits
 BertOutput = Tuple[torch.Tensor, torch.Tensor]
-BASE_BERT = 'bert-large-cased-whole-word-masking'
 
 
 class QAMatchingBert(pl.LightningModule):
+    """
+    BERT model that predicts whether an answer matches a question
+    """
+
     def __init__(
         self,
         bert_pretrained_model: BertForSequenceClassification,
@@ -37,6 +42,9 @@ class QAMatchingBert(pl.LightningModule):
     def _get_metrics(self, batch: BertInput) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Run prediction on a batch with known labels and return evaluation metrics
+
+        Args:
+            batch: Batch of BERT inputs
         """
         loss, logits = self.forward(batch)
         labels_hat = torch.argmax(logits, dim=1)

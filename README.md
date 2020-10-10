@@ -43,7 +43,7 @@ display(HTML(html))
 You can also use a commandline to highlight your answer by giving a question and an answer
 
 ```bash 
-python -m highlighting highlight "Why is life so hard?" "God knows, my friend"
+python -m highlighting highlight --question "Why is life so hard?" --answer "God knows, my friend"
 ```
 
 ## Model training

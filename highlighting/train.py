@@ -1,67 +1,54 @@
 import logging
 import pathlib
-import random
-from typing import List
+from typing import List, Optional
 
 import joblib
-import numpy as np
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from transformers import BertForSequenceClassification
 
-from highlighting import DATA_FOLDER
-from highlighting.model import BASE_BERT, QAMatchingBert
+from highlighting.data import DATA_FOLDER
+from highlighting.dataset import TEST_FILE, TRAIN_FILE, VAL_FILE
+from highlighting.model import BASE_BERT_MODEL_NAME, QAMatchingBert
+from highlighting.utils import set_random_seed
 
 LOGGER = logging.getLogger(__name__)
 
 BATCH_SIZE = 20
 NUM_LABELS = 2  # "answer" or "not an answer"
 
-RANDOM_SEED = 146
+
+class JoblibDataset(Dataset):
+    """
+    Dataset that loads numpy arrays from a joblib file and converts them to tensors
+    """
+
+    def __init__(self, path: pathlib.Path):
+        LOGGER.info('Load data from %s', path)
+        self._data = [tuple(map(torch.tensor, inputs)) for inputs in joblib.load(path)]
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, index: int):
+        return self._data[index]
 
 
-def _load_dataset(path: pathlib.Path):
-    LOGGER.info('Load data from %s', path)
-    return [tuple(map(torch.tensor, t)) for t in joblib.load(path)]
+def train_model(data_folder: pathlib.Path = DATA_FOLDER, gpus: Optional[List[int]] = None):
+    """
+    Train BERT model on a question/answer pair matching task
 
+    Args:
+        data_folder: Folder where pre-tokenized training data is stored
+        gpus: Which GPUs to use for training, set to `None` for training on CPU
+    """
+    set_random_seed()
 
-def get_device():
-    if torch.cuda.is_available():
-        LOGGER.info('There are %d GPU(s) available.', torch.cuda.device_count())
-        LOGGER.info('Using GPU:', torch.cuda.get_device_name())
-        return torch.device('cuda')
-
-    LOGGER.info('No GPU available, using the CPU instead.')
-    return torch.device('cpu')
-
-
-def set_random_seed(seed_value: int):
-    random.seed(seed_value)
-    np.random.seed(seed_value)
-    torch.manual_seed(seed_value)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed_value)
-        torch.cuda.manual_seed_all(seed_value)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-    LOGGER.info(f'set random seed to {seed_value}')
-
-
-def train(
-    gpus: List[int] = (1,),
-    train_path: pathlib.Path = DATA_FOLDER / pathlib.Path('train.joblib'),
-    val_path: pathlib.Path = DATA_FOLDER / pathlib.Path('val.joblib'),
-    test_path: pathlib.Path = DATA_FOLDER / pathlib.Path('test.joblib'),
-):
-    set_random_seed(RANDOM_SEED)
-
-    train_dataset = _load_dataset(train_path)
-    val_dataset = _load_dataset(val_path)
-    test_dataset = _load_dataset(test_path)
+    train_dataset = JoblibDataset(data_folder / TRAIN_FILE)
+    val_dataset = JoblibDataset(data_folder / VAL_FILE)
+    test_dataset = JoblibDataset(data_folder / TEST_FILE)
 
     train_dataloader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=BATCH_SIZE)
     val_dataloader = DataLoader(val_dataset, sampler=SequentialSampler(val_dataset), batch_size=BATCH_SIZE)
@@ -69,17 +56,19 @@ def train(
     test_dataloader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), batch_size=BATCH_SIZE)
 
     LOGGER.info('Loading pretrained bert')
-    bert_pretrained = BertForSequenceClassification.from_pretrained(BASE_BERT, num_labels=NUM_LABELS)
+    bert_pretrained = BertForSequenceClassification.from_pretrained(BASE_BERT_MODEL_NAME, num_labels=NUM_LABELS)
 
-    early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0.0, patience=1, verbose=True, mode='min')
+    model = QAMatchingBert(
+        bert_pretrained_model=bert_pretrained,
+        train_dataloader=train_dataloader,
+        val_dataloader=val_dataloader,
+        test_dataloader=test_dataloader,
+    )
 
     trainer = pl.Trainer(
         gpus=gpus,
-        default_save_path=DATA_FOLDER / '/models/checkpoints/bert/nfL6_classification/',
-        early_stop_callback=early_stop_callback,
+        default_save_path=DATA_FOLDER / 'models' / 'checkpoints' / 'bert' / 'nfL6_classification',
+        early_stop_callback=EarlyStopping(monitor='val_loss', min_delta=0.0, patience=1, verbose=True, mode='min'),
     )
-
-    model = QAMatchingBert(bert_pretrained, train_dataloader, val_dataloader, test_dataloader)
-
     trainer.fit(model)
     trainer.test()

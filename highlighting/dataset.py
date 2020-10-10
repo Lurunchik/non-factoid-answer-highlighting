@@ -1,145 +1,224 @@
+import csv
+import dataclasses
 import json
-import os
+import logging
 import pathlib
+import pickle
 import random
+import tempfile
 from collections import defaultdict
-from functools import partial
 from itertools import chain
-from typing import Tuple
+from typing import IO, List, Sequence, Set, Tuple
 
 import joblib
 import numpy as np
-import pandas as pd
 import rarfile
 import requests
 import torch
-import torch.utils
+import torch.utils.data
 import tqdm
 from transformers import BertTokenizer
 
-from highlighting import DATA_FOLDER
-from highlighting.model import BASE_BERT
+from highlighting.data import ANTIQUE_IDS_PATH, DATA_FOLDER, STUDY_QUERIES_PATH
+from highlighting.model import BASE_BERT_MODEL_NAME
+from highlighting.utils import set_random_seed
 
-DATASET_LINK = 'https://ciir.cs.umass.edu/downloads/nfL6/nfL6.json.rar'
-NFL6_FILENAME = 'nfL6.json'
-MAX_LEN = 128
+LOGGER = logging.getLogger(__name__)
+
+NFL6_DATASET_FILE = 'nfL6.json'
+NFL6_DATASET_ARCHIVE = 'nfL6.json.rar'
+NFL6_DATASET_URL = f'https://ciir.cs.umass.edu/downloads/nfL6/{NFL6_DATASET_ARCHIVE}'
+
+TRAIN_FILE = 'train.joblib'
+VAL_FILE = 'val.joblib'
+TEST_FILE = 'test.joblib'
+
+MAX_SEQUENCE_LENGTH = 128
 
 
-def load_dataset(data_folder: pathlib.Path = DATA_FOLDER):
-    if os.path.exists(data_folder / NFL6_FILENAME):
-        print(f'Dataset found in {data_folder / NFL6_FILENAME}')
+@dataclasses.dataclass(frozen=True)
+class QAExample:
+    id: str
+    question: str
+    answer: str
+    label: int
+
+    def encode(self, tokenizer: BertTokenizer) -> Tuple[np.ndarray, ...]:
+        """
+        Encode this example as BERT input
+
+        Args:
+            tokenizer: BERT tokenizer to use for encoding
+
+        Returns:
+            Tuple of encoded BERT inputs: label, input_ids, attention_mask, token_type_ids
+        """
+        inputs = tokenizer.encode_plus(
+            self.question, self.answer, add_special_tokens=True, max_length=MAX_SEQUENCE_LENGTH, pad_to_max_length=True
+        )
+
+        label = np.array(self.label)
+        input_ids = np.array(inputs.input_ids)
+        attention_mask = np.array(inputs.attention_mask)
+        token_type_ids = np.array(inputs.token_type_ids)
+
+        return label, input_ids, attention_mask, token_type_ids
+
+
+def _download_file(url: str, file: IO[bytes]) -> None:
+    """
+    Download a URL into a file
+
+    Args:
+        url: URL to download
+        file: File-like object that support write
+    """
+    response = requests.get(url, stream=True)
+    size = int(response.headers.get('content-length', 0))
+    with tqdm.tqdm(total=size, unit='iB', unit_scale=True, desc='Downloading file') as progress:
+        for chunk in response.iter_content(chunk_size=1024):
+            file.write(chunk)
+            progress.update(len(chunk))
+
+
+def download_nfl6_dataset(data_folder: pathlib.Path = DATA_FOLDER) -> None:
+    """
+    Download NFL6 dataset (https://ciir.cs.umass.edu/downloads/nfL6/index.html)
+
+    Args:
+        data_folder: Path to the folder where the dataset will be stored
+    """
+    dataset_path = data_folder / NFL6_DATASET_FILE
+
+    if dataset_path.exists():
+        LOGGER.info('NFL6 dataset found in %s ', dataset_path)
         return
 
-    rarname = 'dataset.json.rar'
-    if not os.path.exists(data_folder / rarname):
-        print(f'... Loading dataset archive from {DATASET_LINK} into {rarname}')
-        r = requests.get(DATASET_LINK)
-        with open(data_folder / rarname, 'wb') as f:
-            f.write(r.content)
+    archive_path = data_folder / NFL6_DATASET_ARCHIVE
 
-    print(f'... Unpacking dataset into {NFL6_FILENAME}')
+    if not archive_path.exists():
+        with archive_path.open(mode='wb') as file:
+            LOGGER.info('Loading NFL6 dataset archive from %s into %s', NFL6_DATASET_URL, archive_path)
+            _download_file(url=NFL6_DATASET_URL, file=file)
 
-    with rarfile.RarFile(data_folder / rarname) as f:
-        f.extractall(data_folder)
+    LOGGER.info('Unpacking NFL6 dataset from %s into %s', archive_path, dataset_path)
+    with rarfile.RarFile(archive_path) as archive:
+        archive.extractall(data_folder)
 
-    os.remove(data_folder / rarname)
+    archive_path.unlink(missing_ok=True)
 
 
-def _get_test_ids():
-    study_queries = pd.read_csv(DATA_FOLDER / 'queries_for_study_from_chhir2019.csv', sep=';')
-    test_ids = set(l.split('_')[0] for l in list(study_queries.id))
+def _get_test_ids() -> Set[str]:
+    """
+    Get unique IDs of test examples
 
-    with open(DATA_FOLDER / 'antique_ids.txt') as f:
-        test_ids.update(q_id.strip() for q_id in f)
+    Returns:
+        Set of test IDs
+    """
+    with STUDY_QUERIES_PATH.open(mode='r') as file:
+        reader = csv.DictReader(file, delimiter=';')
+        test_ids = set(row['id'].split('_')[0] for row in reader)
+
+    with ANTIQUE_IDS_PATH.open(mode='r') as file:
+        test_ids.update(file.read().splitlines())
 
     return test_ids
 
 
-def prepare_dataset(data_folder: pathlib.Path = DATA_FOLDER, train_percent: float = 0.8):
-    for fname in ('train', 'val', 'test'):
-        if not os.path.exists(DATA_FOLDER / f'{fname}.joblib'):
-            print(f'joblib dataset files are not found in {DATA_FOLDER}')
-            break
-    else:
-        print(f'training dataset files are found in {DATA_FOLDER}')
-        return
-    load_dataset(data_folder)
-    with open(data_folder / NFL6_FILENAME, 'r', encoding='utf8') as f:
-        yahoo_data = {q['id']: q for q in json.load(f)}
+def _generate_negatives(dataset: Sequence[QAExample], num_negatives: int = 1) -> List[QAExample]:
+    """
+    Generate negative examples for each of the positive examples in a dataset
 
-    dataset = [(d['id'], d['question'], d['answer'], 1) for d in yahoo_data.values()]
+    Args:
+        dataset: Positive dataset
+        num_negatives: Number of negatives to generate
 
-    negatives_traning_data = []
+    Returns:
+        Negative examples
+    """
+    negative_dataset = []
 
-    for q in tqdm.tqdm(dataset):
-        while True:
+    for positive in tqdm.tqdm(dataset, desc='Generating negatives'):
+        negatives = []
+        while len(negatives) < num_negatives:
             negative = random.choice(dataset)
-            if negative[0] != q[0]:
-                break
-        negatives_traning_data.append((q[0], q[1], negative[2], 0))
+            if negative.id != positive.id:
+                negatives.append(QAExample(id=positive.id, question=positive.question, answer=negative.answer, label=0))
 
-    dataset += negatives_traning_data
+        negative_dataset.extend(negatives)
+
+    return negative_dataset
+
+
+def prepare_nfl6_dataset(data_folder: pathlib.Path = DATA_FOLDER, train_ratio: float = 0.8):
+    """
+    Prepare NFL6 dataset for BERT QA matching model training by splitting it into train/val/test and tokenizing
+
+    Args:
+        data_folder: Path to the folder where the dataset splits will be stored
+        train_ratio:
+
+    Returns:
+
+    """
+    dataset_path = data_folder / NFL6_DATASET_FILE
+    if not dataset_path.exists():
+        raise ValueError(f'You need to download NFL6 dataset into {data_folder} with {download_nfl6_dataset.__name__}')
+
+    data_folder.mkdir(parents=True, exist_ok=True)
+
+    train_path = data_folder / TRAIN_FILE
+    val_path = data_folder / VAL_FILE
+    test_path = data_folder / TEST_FILE
+
+    if all(file.exists() for file in [train_path, val_path, test_path]):
+        LOGGER.info('Joblib dataset files are already present in %s', data_folder)
+        return
+
+    LOGGER.info('Saving joblib dataset files to %s', data_folder)
+
+    set_random_seed()
+
+    with (data_folder / NFL6_DATASET_FILE).open('r', encoding='utf8') as f:
+        yahoo_data = {q['id']: q for q in json.load(f)}
 
     test_ids = _get_test_ids()
 
-    assert all(x in yahoo_data for x in test_ids), 'You are probably using different dataset, use force=True option'
+    if any(i not in yahoo_data for i in test_ids):
+        raise ValueError('Some test example IDs are missing, you might be using the wrong data')
 
-    train_dataset, test_dataset = [t for t in dataset if t[0] not in test_ids], [t for t in dataset if t[0] in test_ids]
+    dataset = [QAExample(id=d['id'], question=d['question'], answer=d['answer'], label=1) for d in yahoo_data.values()]
+    dataset += _generate_negatives(dataset)
+
+    train_dataset = [ex for ex in dataset if ex.id not in test_ids]
+    test_dataset = [ex for ex in dataset if ex.id in test_ids]
 
     train_dataset_by_ids = defaultdict(list)
-
-    for q in train_dataset:
-        train_dataset_by_ids[q[0]].append(q)
+    for ex in train_dataset:
+        train_dataset_by_ids[ex.id].append(ex)
 
     assert all(len(q) == 2 for q in train_dataset_by_ids.values())
     assert len(train_dataset_by_ids) + len(test_ids) == len(yahoo_data)
 
-    train_size = int(train_percent * len(train_dataset_by_ids))
-    val_size = len(train_dataset_by_ids) - train_size
+    train_ratio = int(train_ratio * len(train_dataset_by_ids))
+    val_size = len(train_dataset_by_ids) - train_ratio
 
-    train_data_ids, val_data_ids = torch.utils.data.random_split(
-        list(train_dataset_by_ids.keys()), [train_size, val_size]
-    )
-    print(f'Train part: {len(train_data_ids)}, validation: {len(val_data_ids)}, test: {len(test_ids)}')
+    train_ids, val_ids = torch.utils.data.random_split(list(train_dataset_by_ids), [train_ratio, val_size])
 
-    train_data = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in train_data_ids))
-    val_data = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in val_data_ids))
+    train_dataset = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in train_ids))
+    val_dataset = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in val_ids))
 
-    assert len(set(q[0] for q in train_data) & set(q[0] for q in val_data)) == 0
-    # Load the BERT tokenizer.
-    print('Loading BERT tokenizer...')
-    tokenizer = BertTokenizer.from_pretrained(BASE_BERT, do_lower_case=False)
+    LOGGER.info('Train size: %i, validation size: %i, test size: %i', len(train_dataset), len(val_dataset), len(test_dataset))
 
-    for name, part in {'train': train_data, 'val': val_data, 'test': test_dataset}.items():
-        if name == 'test':
-            print(f'Saving {name}.joblib to {DATA_FOLDER}')
-            vectors = list(map(partial(preprocess, tokenizer), tqdm.tqdm(part)))
-            joblib.dump([list(map(np.array, t)) for t in vectors], DATA_FOLDER / f'{name}.joblib')
+    LOGGER.info('Loading BERT tokenizer')
+    tokenizer = BertTokenizer.from_pretrained(BASE_BERT_MODEL_NAME, do_lower_case=True)
 
-
-def preprocess(tokenizer: BertTokenizer, data: Tuple[int, str, str, int]):
-    _, query, answer, label = data
-    inputs = tokenizer.encode_plus(query, answer, add_special_tokens=True, max_length=MAX_LEN,)
-
-    input_ids, token_type_ids = inputs['input_ids'], inputs['token_type_ids']
-    attention_mask = [1] * len(input_ids)
-    padding_length = MAX_LEN - len(input_ids)
-    pad_id = tokenizer.pad_token_id
-    input_ids = input_ids + ([pad_id] * padding_length)
-    attention_mask = attention_mask + ([0] * padding_length)
-    token_type_ids = token_type_ids + ([pad_id] * padding_length)
-
-    assert len(input_ids) == MAX_LEN, 'Error with input length {} vs {}'.format(len(input_ids), MAX_LEN)
-    assert len(attention_mask) == MAX_LEN, 'Error with input length {} vs {}'.format(len(attention_mask), MAX_LEN)
-    assert len(token_type_ids) == MAX_LEN, 'Error with input length {} vs {}'.format(len(token_type_ids), MAX_LEN)
-
-    label = torch.tensor(label)
-    input_ids = torch.tensor(input_ids)
-    attention_mask = torch.tensor(attention_mask)
-    token_type_ids = torch.tensor(token_type_ids)
-
-    return (label, input_ids, attention_mask, token_type_ids)
+    for path, dataset in [(train_path, train_dataset), (val_path, val_dataset), (test_path, test_dataset)]:
+        LOGGER.info('Tokenizing and saving %s', path)
+        vectors = [ex.encode(tokenizer) for ex in tqdm.tqdm(dataset, desc='Tokenization')]
+        joblib.dump(vectors, path, compress=True, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
-    prepare_dataset()
+    download_nfl6_dataset()
+    prepare_nfl6_dataset()
