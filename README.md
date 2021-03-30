@@ -43,7 +43,7 @@ display(HTML(html))
 You can also use a commandline to highlight your answer by giving a question and an answer
 
 ```bash 
-python -m highlighting highlight "why is so hard?" "This is life, my friend"`
+python -m highlighting highlight "why is life so hard?" "This is life, my friend"`
 ```
 
 ## Citation
