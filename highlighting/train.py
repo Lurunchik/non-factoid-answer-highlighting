@@ -27,7 +27,7 @@ class JoblibDataset(Dataset):
 
     def __init__(self, path: pathlib.Path):
         LOGGER.info('Load data from %s', path)
-        self._data = [tuple(map(torch.tensor, inputs)) for inputs in joblib.load(path)]
+        self._data = [tuple(map(torch.LongTensor, inputs)) for inputs in joblib.load(path)]
 
     def __len__(self):
         return len(self._data)

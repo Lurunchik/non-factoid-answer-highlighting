@@ -52,7 +52,9 @@ class BertHighlighter:
         token_weights = {k: w / float(max_token_weight) for k, w in top_tokens}
 
         all_answer_tokens = list(attention.iter_answer_tokens(ignored_tokens=special_tokens, merge_subtokens=True))
-        return get_text_heatmap_html(answer, all_answer_tokens, [token_weights.get(t) for t in all_answer_tokens])
+        return get_text_heatmap_html(
+            text=answer, tokens=all_answer_tokens, weights=[token_weights.get(t) for t in all_answer_tokens],
+        )
 
 
 if __name__ == '__main__':
@@ -62,7 +64,7 @@ if __name__ == '__main__':
         highlighter.highlight(
             question='What is a computer microphone?',
             answer='Microphone. A microphone is a device that captures audio by converting sound waves into an '
-                   'electrical signal. This signal can be amplified as an analog signal or may be converted to a '
-                   'digital signal, which can be processed by a computer or other digital audio device. ',
+            'electrical signal. This signal can be amplified as an analog signal or may be converted to a '
+            'digital signal, which can be processed by a computer or other digital audio device. ',
         )
     )

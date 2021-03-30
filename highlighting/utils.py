@@ -2,7 +2,7 @@ import logging
 import math
 import random
 from string import punctuation
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -39,16 +39,15 @@ def html_replace(text):
     return text
 
 
-def get_text_heatmap_html(text: str, tokens: List[str], weights: List[float], max_alpha: float = 0.8):
-    text = text.lower()
-
+def get_text_heatmap_html(text: str, tokens: List[str], weights: List[Optional[float]], max_alpha: float = 0.8):
     offset = 0
     processed_tokens = []
     for token, weight in zip(tokens, weights):
-        start = text.find(token, offset)
+        start = text.lower().find(token, offset)
         if start < 0:
             raise ValueError(f'Cannot find "{token}" in "{text}" from position {offset}')
 
+        token = text[start : start + len(token)]
         if weight is not None:
             highlighted_token = f'<span style="background-color:rgba(191,63,63,{weight / max_alpha});">{token}</span>'
             processed_tokens.append(highlighted_token)

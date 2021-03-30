@@ -17,7 +17,7 @@ app = typer.Typer()
 
 
 @app.command()
-def load_dataset(
+def load_data(
     data_folder: pathlib.Path = typer.Option(
         DATA_FOLDER, file_okay=False, help='Path to the folder where the dataset will be saved'
     )
@@ -31,9 +31,9 @@ def train(
     data_folder: pathlib.Path = typer.Option(
         DATA_FOLDER, file_okay=False, exists=True, help='Path to the folder where the dataset is stored'
     ),
-    gpus: Optional[List[int]] = typer.Option(None, help='List of GPUs to use, skip to train on CPU'),
+    gpus: List[int] = typer.Option(None, help='List of GPUs to use, skip to train on CPU'),
 ):
-    train_model(data_folder=data_folder, gpus=gpus)
+    train_model(data_folder=data_folder, gpus=list(gpus) or None)
 
 
 @app.command()

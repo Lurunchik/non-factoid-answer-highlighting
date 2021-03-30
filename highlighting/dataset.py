@@ -197,9 +197,6 @@ def prepare_nfl6_dataset(data_folder: pathlib.Path = DATA_FOLDER, train_ratio: f
     for ex in train_dataset:
         train_dataset_by_ids[ex.id].append(ex)
 
-    assert all(len(q) == 2 for q in train_dataset_by_ids.values())
-    assert len(train_dataset_by_ids) + len(test_ids) == len(yahoo_data)
-
     train_ratio = int(train_ratio * len(train_dataset_by_ids))
     val_size = len(train_dataset_by_ids) - train_ratio
 
@@ -208,7 +205,9 @@ def prepare_nfl6_dataset(data_folder: pathlib.Path = DATA_FOLDER, train_ratio: f
     train_dataset = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in train_ids))
     val_dataset = list(chain.from_iterable(train_dataset_by_ids[t_id] for t_id in val_ids))
 
-    LOGGER.info('Train size: %i, validation size: %i, test size: %i', len(train_dataset), len(val_dataset), len(test_dataset))
+    LOGGER.info(
+        'Train size: %i, validation size: %i, test size: %i', len(train_dataset), len(val_dataset), len(test_dataset)
+    )
 
     LOGGER.info('Loading BERT tokenizer')
     tokenizer = BertTokenizer.from_pretrained(BASE_BERT_MODEL_NAME, do_lower_case=True)
