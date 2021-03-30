@@ -36,6 +36,7 @@ black = "^19.10b0"
 isort = "^4.3.21"
 unify = "^0.5"
 pylint = "^2.4.3"
+bertviz = "^1.0.0"
 
 [tool.black]
 line-length = 88

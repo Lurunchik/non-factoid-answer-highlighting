@@ -1,11 +1,11 @@
+import os
 import pathlib
+import webbrowser
 
 import typer
-import webbrowser
-import os
 
-from highlighting.highlighter import BertHighlighter
 from highlighting import DATA_FOLDER
+from highlighting.highlighter import BertHighlighter
 
 app = typer.Typer()
 
@@ -16,7 +16,9 @@ def get_data(data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=Fal
 
 
 @app.command()
-def train(data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=False, exists=True)):
+def train(
+    data_folder: pathlib.Path = typer.Option(DATA_FOLDER, file_okay=False, exists=True)
+):
     ...
 
 
@@ -37,5 +39,5 @@ def highlight(question: str, answer: str):
     webbrowser.open_new_tab(f'file:///{os.getcwd()}/{filename}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app()
