@@ -22,6 +22,9 @@ pytorch-lightning = "^0.5.3"
 numpy = "^1.16.4"
 joblib = "*"
 typer = "^0.3.2"
+ipython = "^7.22.0"
+jupyter = "^1.0.0"
+notebook = "^6.3.0"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.740"

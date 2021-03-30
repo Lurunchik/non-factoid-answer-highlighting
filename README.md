@@ -19,15 +19,15 @@ From source:
 
 ## Highlighter usage
 
-You can import highlighter to run on your texts as shown in [example notebook](https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb) notebook 
+You can import the highlighter to run on your texts as shown in the [example Jupyter notebook](https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb).
 
-Creating highlighter:
+Creating a highlighter object:
 ```python
 from highlighting.highlighter import BertHighlighter
 highlighter = BertHighlighter.from_pretrained()
 ```
 
-Highliting an answer:
+Highlighting an answer:
 ```python
 from IPython.core.display import HTML, display
 
@@ -43,7 +43,7 @@ display(HTML(html))
 You can also use a commandline to highlight your answer by giving a question and an answer
 
 ```bash 
-python -m highlighting highlight "why is life so hard?" "This is life, my friend"`
+python -m highlighting highlight "Why is life so hard?" "God knows, my friend"
 ```
 
 ## Model training
