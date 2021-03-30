@@ -9,7 +9,12 @@ This repository contains code for paper "Do People and Neural Nets Pay Attention
     poetry shell
 
 ## Running
-You can import highlighter to run on your texts as shown in [https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb][example]
+
+You can import highlighter to run on your texts as shown in [example notebook](https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb) notebook 
+
+![](https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.jpg?raw=true)
+
+ 
 
 Or you can use a commandline to highlight your answer by giving a question and an answer
 
@@ -35,4 +40,3 @@ Or you can use a commandline to highlight your answer by giving a question and a
         series = {CIKM '20}
     }    
 
-[example]: https://github.com/Lurunchik/non-factoid-answer-highlighting/blob/master/example.ipynb
