@@ -40,7 +40,7 @@ display(HTML(html))
 ![highlighting](example.png)
  
 
-You can also use a commandline to highlight your answer by giving a question and an answer
+You can also use the command line interface to highlight your answer by giving a question and an answer
 
 ```bash 
 python -m highlighting highlight --question "Why is life so hard?" --answer "God knows, my friend"
@@ -49,9 +49,9 @@ python -m highlighting highlight --question "Why is life so hard?" --answer "God
 ## Model training
 Load and prepare training data:
 ```bash 
-python -m highlighting load_dataset
+python -m highlighting load-data
 ```
-Run traning
+Run training:
 ```bash 
 python -m highlighting train
 ```
