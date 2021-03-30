@@ -37,7 +37,7 @@ html = highlighter.highlight(
 )
 display(HTML(html))
 ```
-![highlighting](example.jpg)
+![highlighting](example.png)
  
 
 You can also use a commandline to highlight your answer by giving a question and an answer
