@@ -24,7 +24,7 @@ class BertHighlighter:
         return self._tokenizer.special_tokens_map.values()
 
     @classmethod
-    def from_pretrained(cls, model_path=DEFAULT_MODEL_PATH):
+    def from_pretrained(cls, model_path: str = DEFAULT_MODEL_PATH):
         return cls(
             tokenizer=BertTokenizer.from_pretrained(cls._bert_architecture, do_lower_case=True),
             qa_model=BertModel.from_pretrained(model_path),

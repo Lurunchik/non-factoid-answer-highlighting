@@ -61,7 +61,6 @@ def train(
     val_path: pathlib.Path = pathlib.Path('val.joblib'),
     test_path: pathlib.Path = pathlib.Path('test.joblib'),
 ):
-    # device = get_device()
     set_random_seed(RANDOM_SEED)
 
     train_dataset = load_dataset(train_path)
