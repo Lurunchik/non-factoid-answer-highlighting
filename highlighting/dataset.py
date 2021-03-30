@@ -46,9 +46,6 @@ def load_dataset(data_folder: pathlib.Path = DATA_FOLDER):
 
 
 def _get_test_ids():
-    """
-    We want to
-    """
     study_queries = pd.read_csv(DATA_FOLDER / 'queries_for_study_from_chhir2019.csv', sep=';')
     test_ids = set(l.split('_')[0] for l in list(study_queries.id))
 
@@ -58,7 +55,7 @@ def _get_test_ids():
     return test_ids
 
 
-def prepare_dataset(data_folder: pathlib.Path = DATA_FOLDER, force: bool = False, train_percent: float = 0.8):
+def prepare_dataset(data_folder: pathlib.Path = DATA_FOLDER, train_percent: float = 0.8):
     for fname in ('train', 'val', 'test'):
         if not os.path.exists(DATA_FOLDER / f'{fname}.joblib'):
             print(f'joblib dataset files are not found in {DATA_FOLDER}')
@@ -84,8 +81,8 @@ def prepare_dataset(data_folder: pathlib.Path = DATA_FOLDER, force: bool = False
     dataset += negatives_traning_data
 
     test_ids = _get_test_ids()
-    if not force:
-        assert all(x in yahoo_data for x in test_ids), 'You are probably using different dataset, use force=True option'
+
+    assert all(x in yahoo_data for x in test_ids), 'You are probably using different dataset, use force=True option'
 
     train_dataset, test_dataset = [t for t in dataset if t[0] not in test_ids], [t for t in dataset if t[0] in test_ids]
 
@@ -122,7 +119,7 @@ def prepare_dataset(data_folder: pathlib.Path = DATA_FOLDER, force: bool = False
 
 def preprocess(tokenizer: BertTokenizer, data: Tuple[int, str, str, int]):
     _, query, answer, label = data
-    inputs = tokenizer.encode_plus(query, answer, add_special_tokens=True, max_length=MAX_LEN, )
+    inputs = tokenizer.encode_plus(query, answer, add_special_tokens=True, max_length=MAX_LEN,)
 
     input_ids, token_type_ids = inputs['input_ids'], inputs['token_type_ids']
     attention_mask = [1] * len(input_ids)
